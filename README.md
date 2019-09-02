@@ -2,7 +2,7 @@
 
 ## SentiMuse Project
 
-### Python + Redis + Tweepy + Google Natural Language Processing
+### Docker Container with Python + Redis + Tweepy + Google Natural Language Processing
 
 Tweet Analyzer Component written in Python.  
 Tweets are streamed by Tweepy and Analyzed for Sentiments, Entities and Syntax using Google Natural Language Processing.  
