@@ -2,23 +2,45 @@ version: '3.5'
 
 services:
   redisdb:
+    container_name: sentimuse_redis
     image: redis
+    labels:
+      - traefik.enable=false
     networks:
       - sentinet
     ports:
       - "6379"
-  web:
+  webserver:
+    container_name: sentimuse_nginx
+    labels:
+      - traefik.backend=sentimuse_nginx
+      - traefik.frontend.rule=Host:sentimuse.***.com
+      - traefik.docker.network=traefik_web
+      - traefik.port=80
+    build:
+      context: nginx
+      dockerfile: Dockerfile
+    networks:
+      - sentinet
+      - traefik_web
+    ports:
+      - 80:80
+    depends_on:
+      - pythoncore
+  pythoncore:
     volumes:
       - .:/app
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: python_web
+    container_name: sentimuse_flask
+    labels:
+      - traefik.enable=false
     networks:
       - sentinet
-    ports:
-      - "5000:5000"
 
 networks:
-    sentinet:
-      name: sentinet
+  traefik_web:
+    external: true
+  sentinet:
+    name: sentinet

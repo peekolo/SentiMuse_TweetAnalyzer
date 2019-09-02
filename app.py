@@ -5,7 +5,8 @@ import redis
 import json
 import time
 from multiprocessing import Process
-from flask import Flask, Response, request
+from flask import Flask, Response, request, render_template
+from werkzeug.datastructures import Headers
 from flask_cors import CORS
 from tweepy import OAuthHandler 
 from google.cloud import language
@@ -66,11 +67,6 @@ class MyStreamListener(tweepy.StreamListener):
 
 	def on_status(self, status):
 		#print(u"Called")
-		if (time.time() - self.start_time) > self.limit:
-			print("time's up")
-			message = json.dumps({'end': 1})
-			r.publish("tweet", message)
-			return False
 
 		try:
 			if hasattr(status, 'retweeted_status') or status.retweeted == 'true':
@@ -145,11 +141,11 @@ class MyStreamListener(tweepy.StreamListener):
 				print(u"error " + str(e))
 
 		finally:
-			newHashTag = r.get("hashtag")
-			if newHashTag is not None:
-				if newHashTag != self.searchKey:
-					print(newHashTag)
-					self.change_filter(newHashTag)
+			if (time.time() - self.start_time) > self.limit:
+				print("time's up")
+				message = json.dumps({'end': 1})
+				r.publish("tweet", message)
+				return False
 
 	def clean_tweet(self, tweet): 
 		''' 
@@ -170,20 +166,27 @@ def event_stream():
     pubsub.subscribe('tweet')
     print("Subscribed")
     for message in pubsub.listen():
-        yield "data: %s\n\n" % message['data']
+    	yield "data: %s\n\n" % message['data']
 
 
 
 app = Flask(__name__)
 CORS(app)
 
+streamHead = Headers()
+streamHead.add('Content-Type', 'text/event-stream')
+streamHead.add('Cache-Control', 'no-cache')
+streamHead.add('X-Accel-Buffering', 'no')
+
 @app.route('/')
 def hello_world():
-    return 'Hello, World!'
+    return render_template('tweets.htm')
+    #return 'Hello, World!'
 
 @app.route("/stream")
 def stream():
-	return Response(event_stream(), mimetype="text/event-stream")
+	return Response(event_stream(), mimetype="text/event-stream", headers=streamHead)
+
 
 @app.route("/start", methods=['POST'])
 def startstream():

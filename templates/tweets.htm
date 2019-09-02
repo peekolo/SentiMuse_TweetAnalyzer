@@ -1,0 +1,205 @@
+<html>
+<head>
+	<style>
+		body{
+			background-color: #000000;
+			color:#FFFFFF;
+		}
+	</style>
+</head>
+<body>
+	<span style='float:left;color:#FFFFFF;' id="hashtagNow"></span>
+	<input style='float:right;margin-left:5px;' type='button' value='Feel' onclick="javascript:sendHashTag();" id="tweetbutton" /><input style='float:right' type='text' id="tweetbox" />
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+	<script type="text/javascript">
+		// Client-side Javascript in the HTML
+
+		var sentimentControl = {
+			overallSenti : 0,
+			totalSenti: 0,
+			numTweets: 0,
+			resetSenti : function(){
+				this.overallSenti = 0;
+				this.totalSenti = 0;
+				this.numTweets = 0;
+				setOverallMood();
+			},
+			newSenti : function(n){
+				this.numTweets++;
+				this.totalSenti += n;
+				this.overallSenti = this.totalSenti/this.numTweets;
+			}
+		};
+
+		var hashControl = {
+			hasHash : false,
+			hashLock : false,
+			hashtag : "",
+			setHash : function(hashtag){
+
+				if(!this.hashLock){
+					alert(hashtag);
+					this.hashtag = hashtag;
+					this.hasHash = true;
+					$("#hashtagNow").html("Sensing " + this.hashtag);
+					$("#tweetbutton").hide();
+					$("#tweetbox").hide();
+					sentimentControl.resetSenti();
+				}else{
+					//alert("locked");
+					console.log("Locked Operation", "error");
+				}
+			},
+			resetHash : function(){
+				//alert("reset");
+				this.lockHash();
+				this.hashtag = '';
+				this,hasHash = false;
+				$("#hashtagNow").html(this.hashtag);
+				$("#tweetbutton").show();
+				$("#tweetbox").show();
+			},
+			lockHash : function(){ //prevent immediate Hash Set after end for 1 sec
+				this.hashLock = true;
+				setTimeout(function(){this.hashLock = false;}.bind(this), 1000);
+			}
+		};
+
+		$(document).ready(function (){
+			var eventSource = new EventSource("/stream");
+
+			eventSource.onmessage = function(e) {
+				var tweet = JSON.parse(e.data);
+				//alert("received - " + tweet);
+				if(tweet.end && tweet.end == 1){
+					//alert("ended");
+					hashControl.resetHash();
+				}else if(tweet.hashtag){
+					if(!hashControl.hasHash){
+						//alert("set")
+						hashControl.setHash(tweet.hashtag);
+					}
+
+					var color = '#8A8A8A';
+					if(tweet.adj){
+						sentimentControl.newSenti(tweet.sentiment);
+						if(tweet.sentiment > 0.2){
+							color = '#FFFF00';
+						}else if(tweet.sentiment < -0.2){
+							color = '#AA2020';
+						}
+						textAppear(tweet.noun, tweet.adj, generateMoodColor(tweet.sentiment));
+					//targetContainer.innerHTML += '<span style=\'color:' + color + ';\'><u>' + tweet.noun + '</u> &nbsp;&nbsp;' +  tweet.adj + "</span><br />";
+					}
+				}
+			};
+
+			eventSource.onerror = function(e) {
+				console.log("EventSource Error", e);
+				return true;
+			}
+
+		});
+		
+		function sendHashTag(){
+			if($("#tweetbox").val().trim() != ''){
+				$.ajax({
+  					method: "POST",
+  					url: "/start", //"http://localhost:5000/sethashtag",
+  					data: JSON.stringify({ hashtag: $("#tweetbox").val().trim() }),
+  					dataType: 'json',
+            		contentType: 'application/json'
+				});
+				hashControl.setHash($("#tweetbox").val().trim());
+			}
+  			return true;
+		}
+
+		function setOverallMood(){
+			//$("#overallSenti").html(sentimentControl.overallSenti);
+			document.body.style.background = generateMoodColor(sentimentControl.overallSenti, {r: 0, g: 0, b:0});
+		}
+
+		function generateMoodColor(n , base){
+			if(!base){
+				base = {r: 255, g: 255, b: 255};
+			}
+			var target = {r: 255, g: 0, b: 0};
+			if(n > 0){
+				target.g = 255;
+			}else{
+				//none
+			}
+
+			return shadeBetweenTwoColors(Math.abs(n), base, target);
+		}
+
+		function shadeBetweenTwoColors(n, c1, c2){
+			var result = {};
+			result.r = Math.round(c1.r + ((c2.r - c1.r) * n));
+			result.g = Math.round(c1.g + ((c2.g - c1.g) * n));
+			result.b = Math.round(c1.b + ((c2.b - c1.b) * n));
+			return rgbToHex(result.r, result.g, result.b);
+		}
+
+		function componentToHex(c) {
+  			var hex = c.toString(16);
+  			return hex.length == 1 ? "0" + hex : hex;
+		}
+
+		function rgbToHex(r, g, b) {
+  			return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+		}
+
+		function textAppear(noun, adj, color){
+			// vary size for fun
+			setOverallMood();
+			var s = noun + " - " + adj;
+			var divsize = ((Math.random()*100) + 50).toFixed();
+			//var color = '#'+ Math.round(0xffffff * Math.random()).toString(16);
+			var newdiv = $('<div/>').css({
+				'width':divsize+'px',
+				'height':divsize+'px',
+				'font-size': '2.5rem',
+				'color': color
+			});
+
+			// make position sensitive to size and document's width
+			var posx = (Math.random() * ($(document).width() - divsize)).toFixed();
+			var posy = (Math.random() * ($(document).height() - divsize)).toFixed();
+			newdiv.html(noun);
+			newdiv.css({
+				'position':'absolute',
+				'left':posx+'px',
+				'top':posy+'px',
+				'display':'none'
+			}).appendTo( 'body' ).fadeIn(100).delay(3000).fadeOut(500, function(){
+				$(this).remove();
+			}); 
+			//console.log(posx);
+			posx = (parseInt(posx, 10) + 80).toFixed();
+			posy = (parseInt(posy, 10) + 40).toFixed();
+			//console.log(posx);
+			var adjdiv = $('<div/>').css({
+				'width':divsize+'px',
+				'height':divsize+'px',
+				'font-size': '1rem',
+				'color': color
+			});
+			adjdiv.html(adj);
+
+			adjdiv.css({
+				'position':'absolute',
+				'left':posx+'px',
+				'top':posy +'px',
+				'display':'none'
+			}).appendTo( 'body' ).fadeIn(100).delay(3000).fadeOut(500, function(){
+				$(this).remove();
+			});
+
+
+		}
+
+	</script>
+</body>
+</html>
